@@ -17,7 +17,8 @@ import time
 import warnings
 
 warnings.filterwarnings("ignore")
-
+#s为word2vec的维度，w为每个短评取多少个词向量，wind为生成word2vec扫描的窗宽
+#对于词数少于w的短评我选择重复，而不是补零
 def load_data(X,Y,s=100,w=50,min_c =5,wind =5):
     reviews = open(X).readlines()
     labels =open(Y).readlines()
