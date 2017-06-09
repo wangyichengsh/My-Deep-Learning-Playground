@@ -89,7 +89,7 @@ def build_model(layers):  #layers [1,50,100,1]
     model.add(Activation("softmax"))
 
     start = time.time()
-    model.compile(loss="categorical_crossentropy", optimizer="rmsprop")
+    model.compile(loss="categorical_crossentropy", optimizer="rmsprop",metrics =['acc'])
 
     print("Compilation Time : ", time.time() - start)
     return model
