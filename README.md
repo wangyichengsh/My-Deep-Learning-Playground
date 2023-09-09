@@ -10,3 +10,6 @@ Contents
 	
 - TensorFlow-Playground
 	- To implement the [Deep Learning 21 Examples](https://github.com/hzy46/Deep-Learning-21-Examples/tree/master) with `python3` and `TensorFlow 2.0` in `jupyter notebook`
+
+- MIT6S081
+	- The lab of MIT6S.081
