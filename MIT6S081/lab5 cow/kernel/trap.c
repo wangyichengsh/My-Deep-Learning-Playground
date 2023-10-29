@@ -67,8 +67,12 @@ usertrap(void)
     syscall();
   } else if((which_dev = devintr()) != 0){
     // ok
-  } else if(r_scause() == 13 || r_scause() == 15){
+  } else if((r_scause() == 15) && checkcow(p->pagetable, r_stval())){
     uint64 va = r_stval();
+    if(va >=MAXVA ||((uint64)va>=PGROUNDDOWN(p->trapframe->sp)-PGSIZE&&(uint64)va<=PGROUNDDOWN(p->trapframe->sp))){
+      printf("cowcopy fault!");
+      p->killed = 1;
+    }
     if(cowcopy(p->pagetable, va)==-1){
       printf("cowcopy fault!");
       p->killed = 1;
