@@ -310,10 +310,13 @@ uvmcopy(pagetable_t old, pagetable_t new, uint64 sz)
     if((*pte & PTE_V) == 0)
       panic("uvmcopy: page not present");
     pa = PTE2PA(*pte);
-    *pte &= ~PTE_W;
-    *pte |= PTE_COW;
-
     flags = PTE_FLAGS(*pte);
+    if(flags & PTE_W){
+      *pte &= ~PTE_W;
+      *pte |= PTE_COW;
+      flags = PTE_FLAGS(*pte);
+    }
+
     if(mappages(new, i, PGSIZE, (uint64)pa, flags) != 0){
        goto err;
     }
@@ -326,39 +329,52 @@ uvmcopy(pagetable_t old, pagetable_t new, uint64 sz)
   return -1;
 }
 
+// check pte COW
+int 
+checkcow(pagetable_t pagetable, uint64 va)
+{
+  pte_t *pte;
+  pte = walk(pagetable, va, 0);
+  if(pte == 0)
+    return 0;
+  if(((*pte) & PTE_V) == 0)
+    return 0;
+  if(((*pte) & PTE_U) == 0)
+    return 0;
+  return (*pte) & PTE_COW;
+  
+}
+
+
 // copy cow page to a new page while page fault write.
 uint64
 cowcopy(pagetable_t pagetable, uint64 va){
+  if(checkcow(pagetable, va)==0){
+    goto err;
+  }
   pte_t *pte;
   
-  va = PGROUNDDOWN(va);  
+  va = PGROUNDDOWN(va);
   pte = walk(pagetable, va, 0);
-  uint64 pa = PTE2PA(*pte);
-
   if(pte == 0)
     panic("cowcopy");
+  
+  uint64 pa = PTE2PA(*pte);
+  if(pa == 0)
+    panic("cowcopy");
 
+  uint flags = PTE_FLAGS(*pte);
 
-  if(get_ref(pa)==1){
-    *pte |= PTE_W;
-    *pte &= ~PTE_COW;
-    return pa;
-  } else{
-    char *mem;
-    *pte &= ~PTE_V;
-    uint flags = PTE_FLAGS(*pte);
-    flags |= PTE_W;
-    flags &= ~PTE_COW;
-    if((mem = kalloc()) == 0)
-      goto err;
+  if(flags & PTE_COW){
+    char *mem = kalloc();
+    if( mem == 0) panic("cowcopy");
     memmove(mem, (char*)pa, PGSIZE);
-    if(mappages(pagetable, va, PGSIZE, (uint64)mem, flags) != 0){
-      kfree(mem);
-      goto err;
-    }
     kfree((void*)pa);
-    return pa;
+    flags = (flags & ~PTE_COW)|PTE_W;
+    *pte =  PA2PTE((uint64)mem) | flags;
+    return 0;
   }
+
  err:
   return -1;
 }
@@ -376,20 +392,6 @@ uvmclear(pagetable_t pagetable, uint64 va)
   *pte &= ~PTE_U;
 }
 
-int 
-checkcow(pagetable_t pagetable, uint64 va)
-{
-  pte_t *pte;
-  
-  pte = walk(pagetable, va, 0);
-  if(pte == 0)
-    return 0;
-  if(((*pte) & PTE_V) == 0)
-    return 0;
-  return (*pte) & PTE_COW;
-  
-}
-
 
 // Copy from kernel to user.
 // Copy len bytes from src to virtual address dstva in a given page table.
@@ -401,12 +403,12 @@ copyout(pagetable_t pagetable, uint64 dstva, char *src, uint64 len)
 
   while(len > 0){
     va0 = PGROUNDDOWN(dstva);
-    pa0 = walkaddr(pagetable, va0);
-    if(pa0 == 0)
-      return -1;
     if(checkcow(pagetable, va0)!=0){
       cowcopy(pagetable, va0);
     }
+    pa0 = walkaddr(pagetable, va0);
+    if(pa0 == 0)
+      return -1;
     n = PGSIZE - (dstva - va0);
     if(n > len)
       n = len;
